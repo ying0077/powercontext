@@ -2469,6 +2469,8 @@ Use pc_review_list / pc_review_get for requested candidate inspection. Generatio
 Memory correction requires the requested change, exact current Atomic Memory artifact and real content ETag from pc_memory_get. pc_memory_retire sets recoverable forgotten state using the exact artifact and state_version from search, list or pc_memory_state. Follow next_cursor for later inventory pages. Empty retrieval is normal. On failure, denial, or missing Scope, report the operation and safe returned reason without guessing causes or claiming saved/restored context. Avoid repeated failed calls and continue ordinary work.
 Use powercontext-project-context for a relevant detailed workflow if that Skill is available; no Skill detour is needed before every response.`;
 const CONTEXT_PREFIX = "PowerContext host-supplied context.";
+const PERMISSION = "powercontext";
+const DEFAULT_PERMISSION_RULE = `${PERMISSION.slice(0, -1)}?`;
 const MAX_SOURCE_BYTES = 2e5;
 const MAX_SESSION_CACHE = 256;
 function promptText(parts, transportEncoded) {
@@ -2737,7 +2739,7 @@ function operationTool(runtime, definition) {
 		args: definition.args,
 		async execute(args, context) {
 			if (operationMutates(definition.operationId)) await context.ask({
-				permission: "powercontext",
+				permission: PERMISSION,
 				patterns: [definition.operationId],
 				always: [],
 				metadata: { operation: definition.operationId }
@@ -3039,6 +3041,15 @@ const PowerContextPlugin = async (input) => {
 		return {};
 	}
 	const hooks = {
+		config: async (config) => {
+			const settings = config;
+			const permission = settings.permission;
+			if (typeof permission === "string" || permission && DEFAULT_PERMISSION_RULE in permission) return;
+			settings.permission = {
+				[DEFAULT_PERMISSION_RULE]: "ask",
+				...permission
+			};
+		},
 		tool: createTools(runtime),
 		"chat.message": async (event, output) => {
 			const messageID = event.messageID ?? output.message.id;

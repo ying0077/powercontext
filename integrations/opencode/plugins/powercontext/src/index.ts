@@ -43,6 +43,10 @@ Memory correction requires the requested change, exact current Atomic Memory art
 Use powercontext-project-context for a relevant detailed workflow if that Skill is available; no Skill detour is needed before every response.`
 
 const CONTEXT_PREFIX = 'PowerContext host-supplied context.'
+const PERMISSION = 'powercontext'
+// OpenCode matches permission names against rule keys as wildcards, where `?` stands for one character. This key
+// matches only the plugin's permission, yet it differs from a `powercontext` key the user writes.
+const DEFAULT_PERMISSION_RULE = `${PERMISSION.slice(0, -1)}?`
 const MAX_SOURCE_BYTES = 200_000
 const MAX_SESSION_CACHE = 256
 
@@ -331,7 +335,7 @@ function operationTool(
     async execute(args, context) {
       if (operationMutates(definition.operationId)) {
         await context.ask({
-          permission: 'powercontext',
+          permission: PERMISSION,
           patterns: [definition.operationId],
           always: [],
           metadata: { operation: definition.operationId },
@@ -650,6 +654,16 @@ export const PowerContextPlugin: Plugin = async (input) => {
   }
 
   const hooks: Awaited<ReturnType<Plugin>> = {
+    // OpenCode's agents allow every permission their defaults do not name, so a durable mutation would run without
+    // the confirmation it requests. OpenCode applies the last matching rule, and the default comes before every rule
+    // the user configures, so those rules still decide each operation they match.
+    config: async (config) => {
+      // The SDK's Config type predates permissions keyed by name.
+      const settings = config as { permission?: string | Record<string, unknown> }
+      const permission = settings.permission
+      if (typeof permission === 'string' || (permission && DEFAULT_PERMISSION_RULE in permission)) return
+      settings.permission = { [DEFAULT_PERMISSION_RULE]: 'ask', ...permission }
+    },
     tool: createTools(runtime),
     'chat.message': async (event, output) => {
       const messageID = event.messageID ?? output.message.id
